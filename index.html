@@ -1,0 +1,261 @@
+<html lang="de">
+  <head>
+    <meta charset="utf-8" />
+    <title>title</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <script src="https://efpage.de/DML/DML_homepage/lib/DML-min.js"></script>
+  </head>
+  <body>
+    <script>
+      var dove = new Image();
+      //dove.src = "https://www.jwoodvet.co.uk/wp-content/uploads/2018/08/dog-collapse.jpg";
+      // Good luck
+      //dove.src = "https://www.nuclearblast.de/static/articles/302/302067.jpg/400x400.jpg";
+      //dove.src = "https://i.pinimg.com/236x/63/38/b1/6338b11f0948fc552db1f3b9ff54a7c9.jpg"
+      //dove.src = 'https://i.ebayimg.com/d/w1600/pict/133777660034_/Looney-Tunes-Lola-Lapin-Vintage-Cartoons-TV-Montre.jpg'
+      dove.src =
+        "https://pbs.twimg.com/profile_images/810261498635423745/7Jt0ZuOq_400x400.jpg";
+      function sleep(ms) {
+        return new Promise((r, err) => {
+          setTimeout(r, ms);
+        });
+      }
+
+      class Board {
+        cssCell = `
+      background:darkorange;
+      height:100px; width:100px;
+      margin:0px;cursor:pointer;flex: 0 0 100px;
+      display:flex;align-items: center;
+      justify-content: center;color: orange; 
+      padding: 1px;
+    `;
+
+        cssBoard = `
+      padding:10px;display:flex;
+      flex-wrap:wrap;background:darkorange;
+      width:408px;margin:0 auto;
+      border-radius: 5px;
+    `;
+
+        historypos = [];
+        undos = [];
+        redos = [];
+        undoing = false;
+        redoing = false;
+
+        checkValidBoard() {
+          function checkPos(c) {
+            return c.dataset.pos == c.dataset.curpos;
+          }
+          return this.cells.every(checkPos);
+        }
+
+        findDirectionToMove(cell) {
+          const [getCol, getRow] = [
+            (pos) => pos % 4,
+            (pos) => Math.trunc(pos / 4)
+          ];
+
+          const cellpos = Number(cell.dataset.curpos);
+          const emptyCellpos = Number(this.emptyCell.dataset.curpos);
+
+          const rowcolEmpty = [getRow(emptyCellpos), getCol(emptyCellpos)];
+          const rowcolCell = [getRow(cellpos), getCol(cellpos)];
+
+          const sameColOrRow =
+            rowcolEmpty[0] == rowcolCell[0] || rowcolEmpty[1] == rowcolCell[1];
+
+          if (!sameColOrRow) return;
+
+          const directions = {
+            [cellpos - 1]: "left",
+            [cellpos + 1]: "right",
+            [cellpos - 4]: "up",
+            [cellpos + 4]: "down"
+          };
+          let posdir = Object.keys(directions).find(
+            (pos) => pos == emptyCellpos
+          );
+          return directions[posdir];
+        }
+
+        findOpositeDirection(direction) {
+          if (direction == "up") {
+            return "down";
+          }
+          if (direction == "down") {
+            return "up";
+          }
+          if (direction == "left") {
+            return "right";
+          }
+          if ((direction = "right")) {
+            return "left";
+          }
+        }
+
+        moveCell(cell) {
+          const direction = this.findDirectionToMove(cell);
+          if (!direction) return;
+
+          const amount = 102;
+          const duration = 200;
+          const coef = {
+            left: -1,
+            right: 1,
+            down: 1,
+            up: -1
+          };
+
+          const oppositeDirection = this.findOpositeDirection(direction);
+
+          const cssTranslate = (cell, direction) => {
+            if (direction == "left" || direction == "right") {
+              cell.dataset.dx =
+                Number(cell.dataset.dx) + amount * coef[direction];
+            }
+            if (direction == "up" || direction == "down") {
+              cell.dataset.dy =
+                Number(cell.dataset.dy) + amount * coef[direction];
+            }
+            return `translate(${cell.dataset.dx}px, ${cell.dataset.dy}px )`;
+          };
+
+          cell.animate(
+            { transform: cssTranslate(cell, direction) },
+            { duration: duration, fill: "forwards" }
+          );
+
+          this.emptyCell.animate(
+            { transform: cssTranslate(this.emptyCell, oppositeDirection) },
+            { duration: duration, fill: "forwards" }
+          );
+
+          let temp = this.emptyCell.dataset.curpos;
+          this.emptyCell.dataset.curpos = cell.dataset.curpos;
+          cell.dataset.curpos = temp;
+
+          this.historypos.push(Number(cell.dataset.curpos));
+
+          if (this.undoing == false) this.undos = [...this.historypos];
+          this.undoing = false;
+
+          if (this.redoing == false) this.redos = [...this.undos];
+          this.redoing = false;
+        }
+
+        createCells() {
+          // fills cells array with cell element
+          this.cells = [...Array(16)].map((_, i) => {
+            let y = Math.trunc(i / 4);
+            let x = i % 4;
+            let options = {
+              style: this.cssCell,
+              ["data-pos"]: i,
+              ["data-curpos"]: i,
+              ["data-dx"]: 0,
+              ["data-dy"]: 0
+            };
+            let cell = create("div", options);
+            selectBase(cell);
+            var canvas = canvas2D({ width: "100px", height: "100px" });
+            canvas.ctx.drawImage(
+              dove,
+              100 * x,
+              100 * y,
+              100,
+              100,
+              0,
+              0,
+              100,
+              100
+            );
+            unselectBase();
+            cell.onclick = () => {
+              this.moveCell(cell);
+            };
+            return cell;
+          });
+
+          // empty cell customisation
+          this.emptyCell = this.cells[15];
+          this.emptyCell.style.opacity = "0.25";
+          this.emptyCell.style.zIndex = 0;
+        }
+
+        displayBoard() {
+          selectBase(div(""));
+          print("<h1 style='text-align:center'>Sliding Puzzle</h1>");
+          unselectBase();
+
+          this.board = selectBase(div("", { style: this.cssBoard }));
+          this.cells.map(appendBase);
+          unselectBase();
+
+          selectBase(div("", "text-align:center;margin-top:20px"));
+          button("Shuffle").onclick = () => this.shuffle();
+          button("Reset").onclick = () => {
+            this.board.innerHTML = "";
+            selectBase(this.board);
+            this.createCells();
+            this.cells.map(appendBase);
+            unselectBase();
+          };
+          button("undo").onclick = () => {
+            if (this.undos.length > 0) {
+              this.undoing = true;
+              let lastpos = this.undos.splice(-1)[0];
+              this.moveCellByCurpos(lastpos);
+            }
+          };
+          button("redo").onclick = () => {
+            if (this.redos.length > 0) {
+              this.redoing = true;
+              let lastpos = this.redos.splice(-1)[0];
+              this.moveCellByCurpos(lastpos);
+            }
+          };
+          unselectBase();
+        }
+
+        moveCellByCurpos(cellpos) {
+          let cell = this.cells.find((cell) => cell.dataset.curpos == cellpos);
+          this.moveCell(cell);
+        }
+
+        async shuffle() {
+          for (let i = 0; i < 100; i++) {
+            const emptyPos = Number(this.emptyCell.dataset.curpos);
+            const validPos = [
+              emptyPos - 1,
+              emptyPos + 1,
+              emptyPos - 4,
+              emptyPos + 4
+            ].filter((pos) => {
+              return pos >= 0 && pos <= 15;
+            });
+            const randomPos =
+              validPos[Math.floor(Math.random() * validPos.length)];
+            await sleep(10);
+            this.moveCellByCurpos(randomPos);
+          }
+        }
+
+        start() {
+          this.createCells();
+          this.displayBoard();
+        }
+      }
+
+      function main() {
+        dove.onload = () => {
+          window.b = new Board();
+          b.start();
+        };
+      }
+
+      main();
+    </script>
+  </body>
+</html>
